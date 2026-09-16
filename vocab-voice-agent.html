@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vocab Voice Coach</title>
+<style>
+  :root{
+    --bg:#0f1115; --bg2:#161a21; --card:#1c212b; --border:#2a3140;
+    --accent:#5eead4; --accent2:#818cf8; --text:#e8eaf0; --muted:#8b93a7;
+    --good:#4ade80; --bad:#f87171; --warn:#fbbf24;
+  }
+  /* Dark theme forced — no light variant */
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    min-height:100vh; display:flex; justify-content:center; padding:24px 16px;
+  }
+  .wrap{width:100%; max-width:580px;}
+  header{text-align:center; margin-bottom:18px;}
+  header h1{font-size:1.5rem; margin:0 0 4px; letter-spacing:-0.02em;}
+  header p{color:var(--muted); margin:0; font-size:0.87rem;}
+
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:24px; margin-bottom:16px;
+  }
+
+  .stage-tag{
+    display:inline-block; font-size:0.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--accent); background:rgba(94,234,212,0.1); border:1px solid rgba(94,234,212,0.25);
+    padding:3px 9px; border-radius:99px; margin-bottom:12px;
+  }
+
+  .progress-row{display:flex; align-items:center; gap:10px; margin-bottom:16px;}
+  .progress-bar{flex:1; height:6px; background:var(--border); border-radius:99px; overflow:hidden;}
+  .progress-fill{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .4s ease;}
+  .progress-label{font-size:0.75rem; color:var(--muted); white-space:nowrap;}
+
+  .word-display{text-align:center; margin-bottom:18px;}
+  .word-display .word{font-size:2rem; font-weight:700; letter-spacing:-0.01em;}
+  .word-display .pos{color:var(--accent); font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em;}
+  .word-display .def{color:var(--muted); margin-top:8px; font-size:0.94rem; line-height:1.5;}
+  .word-display .ex{margin-top:10px; font-size:0.87rem; font-style:italic; color:var(--muted); border-left:3px solid var(--border); padding-left:10px; text-align:left;}
+
+  .scenario-box{
+    background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px;
+    margin-bottom:14px;
+  }
+  .scenario-box .prompt{font-size:1.02rem; font-weight:600; line-height:1.5;}
+  .target-chips{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .chip{
+    font-size:0.8rem; font-weight:600; padding:5px 11px; border-radius:99px;
+    border:1px solid var(--border); background:var(--card); color:var(--muted);
+    transition:all .2s ease;
+  }
+  .chip.hit{background:rgba(74,222,128,0.15); color:var(--good); border-color:rgba(74,222,128,0.35);}
+  .chip.miss{background:rgba(248,113,113,0.1); color:var(--bad); border-color:rgba(248,113,113,0.3);}
+
+  .agent-line{
+    display:flex; gap:10px; align-items:flex-start; margin-bottom:14px;
+    background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px;
+  }
+  .agent-avatar{
+    width:32px; height:32px; border-radius:50%; flex:none;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+  }
+  .agent-text{font-size:0.92rem; line-height:1.5; padding-top:5px;}
+  .agent-text.speaking{color:var(--accent);}
+
+  .controls{display:flex; flex-direction:column; gap:10px; align-items:center;}
+  .mic-btn{
+    width:72px; height:72px; border-radius:50%; border:none; cursor:pointer;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 18px rgba(94,234,212,0.25);
+    transition:transform .15s ease;
+  }
+  .mic-btn:active{transform:scale(0.94);}
+  .mic-btn.listening{animation:pulse 1.2s ease-in-out infinite;}
+  .mic-btn:disabled{opacity:0.4; cursor:not-allowed;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(94,234,212,0.5);}
+    70%{box-shadow:0 0 0 18px rgba(94,234,212,0);}
+    100%{box-shadow:0 0 0 0 rgba(94,234,212,0);}
+  }
+  .mic-icon{width:26px; height:26px; fill:#0f1115;}
+  .mic-hint{font-size:0.78rem; color:var(--muted);}
+
+  .transcript{min-height:20px; text-align:center; font-size:0.95rem; margin-top:6px; padding:0 8px;}
+  .transcript.empty{color:var(--muted); font-style:italic;}
+
+  .feedback{
+    margin-top:12px; padding:10px 14px; border-radius:10px; font-size:0.88rem;
+    display:none; align-items:center; gap:8px;
+  }
+  .feedback.show{display:flex;}
+  .feedback.good{background:rgba(74,222,128,0.12); color:var(--good); border:1px solid rgba(74,222,128,0.3);}
+  .feedback.bad{background:rgba(248,113,113,0.12); color:var(--bad); border:1px solid rgba(248,113,113,0.3);}
+
+  .row-btns{display:flex; gap:10px; margin-top:16px;}
+  .btn{
+    flex:1; padding:12px 16px; border-radius:10px; border:1px solid var(--border);
+    background:var(--bg2); color:var(--text); font-size:0.9rem; font-weight:600; cursor:pointer;
+  }
+  .btn:hover{background:var(--border);}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#0f1115; border:none;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+
+  .start-screen{text-align:center; padding:6px 2px;}
+  .start-screen .big-emoji{font-size:2.6rem; margin-bottom:6px;}
+  .start-screen p{color:var(--muted); font-size:0.9rem; line-height:1.55; margin:8px 0 18px;}
+
+  .cat-grid{display:flex; flex-direction:column; gap:10px; margin-top:4px;}
+  .cat-card{
+    text-align:left; border:1px solid var(--border); background:var(--bg2); border-radius:12px;
+    padding:14px 16px; cursor:pointer; transition:border-color .15s ease, background .15s ease;
+  }
+  .cat-card:hover{border-color:var(--accent);}
+  .cat-card .cname{font-weight:700; font-size:0.98rem;}
+  .cat-card .cdesc{color:var(--muted); font-size:0.82rem; margin-top:3px;}
+
+  .support-warning{
+    background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:var(--warn);
+    border-radius:10px; padding:10px 12px; font-size:0.8rem; margin-bottom:14px;
+  }
+
+  .summary{text-align:center;}
+  .stat-grid{display:flex; gap:10px; margin:16px 0;}
+  .stat{flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 8px;}
+  .stat .num{font-size:1.5rem; font-weight:800; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .stat .lbl{font-size:0.72rem; color:var(--muted); margin-top:2px;}
+
+  footer{text-align:center; color:var(--muted); font-size:0.72rem; margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🗣️ Vocab Voice Coach</h1>
+    <p>Teaches you words, then makes you actually use them in a real spoken answer.</p>
+  </header>
+
+  <div id="warningBox"></div>
+  <div class="card" id="mainCard"></div>
+
+  <footer>Works best in Chrome / Edge. Runs fully in your browser — nothing is uploaded anywhere.</footer>
+</div>
+
+<script>
+(function(){
+  const CATEGORIES = [
+    {
+      id:"pm", label:"💼 Interview & Work", desc:"Words that show up in interviews and workplace conversations.",
+      words:[
+        {word:"Leverage", pos:"verb", def:"to use something to maximum advantage", example:"We leveraged customer feedback to redesign the app."},
+        {word:"Iterate", pos:"verb", def:"to repeat a process, improving it each time", example:"The team iterated on the prototype after every user test."},
+        {word:"Stakeholder", pos:"noun", def:"a person with an interest in how something turns out", example:"We looped in all stakeholders before launch."},
+        {word:"Bandwidth", pos:"noun", def:"the time or capacity available to do something", example:"I don't have the bandwidth to take on another project this week."},
+        {word:"Prioritize", pos:"verb", def:"to treat something as more important than other things", example:"We had to prioritize the bug fixes over new features."},
+        {word:"Scalable", pos:"adjective", def:"able to grow or expand easily", example:"The solution needed to be scalable to millions of users."}
+      ],
+      scenarios:[
+        {prompt:"Tell me how you'd handle it when your team has too much to do at once.", targets:["Prioritize","Bandwidth"]},
+        {prompt:"Explain how you'd approach building a brand-new product feature.", targets:["Iterate","Scalable"]},
+        {prompt:"Talk about how you keep different people aligned on a project.", targets:["Stakeholder","Leverage"]}
+      ]
+    },
+    {
+      id:"everyday", label:"☕ Everyday Conversation", desc:"Words to sound sharper in regular conversation.",
+      words:[
+        {word:"Candid", pos:"adjective", def:"honest and straightforward; frank", example:"She gave a candid opinion about the restaurant."},
+        {word:"Eloquent", pos:"adjective", def:"fluent and persuasive in speaking", example:"He gave an eloquent toast at the wedding."},
+        {word:"Resilient", pos:"adjective", def:"able to recover quickly from difficulty", example:"Kids are often more resilient than we expect."},
+        {word:"Tenacious", pos:"adjective", def:"persistent; not giving up easily", example:"Her tenacious attitude got her through marathon training."},
+        {word:"Skeptical", pos:"adjective", def:"not easily convinced; having doubts", example:"I was skeptical about the new diet trend."},
+        {word:"Meticulous", pos:"adjective", def:"showing great attention to detail", example:"He's meticulous about keeping his kitchen clean."}
+      ],
+      scenarios:[
+        {prompt:"Describe a friend whose personality you admire.", targets:["Candid","Eloquent"]},
+        {prompt:"Talk about a time something didn't go your way, but you handled it well.", targets:["Resilient","Tenacious"]},
+        {prompt:"Describe how you make a big decision, like buying something expensive.", targets:["Skeptical","Meticulous"]}
+      ]
+    },
+    {
+      id:"academic", label:"📚 Academic / Exam", desc:"Higher-level words common in essays and exams like GRE.",
+      words:[
+        {word:"Ephemeral", pos:"adjective", def:"lasting for a very short time", example:"Social media trends are often ephemeral."},
+        {word:"Ubiquitous", pos:"adjective", def:"present or found everywhere", example:"Coffee shops are ubiquitous in this city."},
+        {word:"Ambiguous", pos:"adjective", def:"open to more than one interpretation", example:"The instructions were ambiguous, so everyone did it differently."},
+        {word:"Pragmatic", pos:"adjective", def:"dealing with things sensibly and realistically", example:"We need a pragmatic solution, not a perfect one."},
+        {word:"Versatile", pos:"adjective", def:"able to adapt to many different uses", example:"This tool is versatile enough for beginners and experts."},
+        {word:"Authentic", pos:"adjective", def:"genuine; not fake or copied", example:"The restaurant serves authentic Italian food."}
+      ],
+      scenarios:[
+        {prompt:"Describe a trend you've noticed recently, in fashion or technology.", targets:["Ephemeral","Ubiquitous"]},
+        {prompt:"Talk about a decision where the right answer wasn't obvious.", targets:["Ambiguous","Pragmatic"]},
+        {prompt:"Describe a skill or tool you find useful in many situations.", targets:["Versatile","Authentic"]}
+      ]
+    }
+  ];
+
+  const synth = window.speechSynthesis;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const hasSTT = !!SR;
+  const hasTTS = !!synth;
+  let recognition = null;
+  if (hasSTT){
+    recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+  }
+
+  const mainCard = document.getElementById("mainCard");
+  const warningBox = document.getElementById("warningBox");
+  if (!hasSTT){
+    warningBox.innerHTML = `<div class="support-warning">⚠️ Your browser doesn't support voice input. You'll still hear the agent, and can type your answers instead. Try Chrome or Edge for full voice interaction.</div>`;
+  }
+
+  let category = null;
+  let stage = "start";
+  let wIdx = 0;
+  let sIdx = 0;
+  let reviewQueue = [];
+  let reviewIdx = 0;
+  let speaking = false;
+  let lastTranscript = "";
+  let pronounceOk = null;
+  let stats = { taught:0, pronounced:0, targetsTotal:0, targetsHit:0, reviewFixed:0 };
+  let lastHits = [];
+
+  function norm(s){ return (s||"").toLowerCase().replace(/[^a-z\s]/g,""); }
+  function wordStem(w){ w = w.toLowerCase(); return w.length > 5 ? w.slice(0, w.length-2) : w; }
+  function looseContains(transcript, word){
+    const t = norm(transcript);
+    const w = word.toLowerCase();
+    return t.includes(w) || t.includes(wordStem(w));
+  }
+
+  function speak(text, onEnd){
+    if (!hasTTS){ if(onEnd) onEnd(); return; }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.98;
+    u.onend = () => { speaking = false; if(onEnd) onEnd(); else render(); };
+    speaking = true;
+    render();
+    synth.speak(u);
+  }
+
+  function listen(onResult){
+    if (!hasSTT) return;
+    lastTranscript = "";
+    try{ recognition.start(); }catch(e){}
+    recognition.onresult = (e) => { onResult(e.results[0][0].transcript); };
+    recognition.onerror = () => { lastTranscript = "(didn't catch that)"; render(); };
+  }
+
+  function chooseCategory(cat){
+    category = cat;
+    wIdx = 0; sIdx = 0; reviewQueue = []; reviewIdx = 0;
+    stats = { taught:0, pronounced:0, targetsTotal:0, targetsHit:0, reviewFixed:0 };
+    teachNext();
+  }
+
+  function teachNext(){
+    if (wIdx >= category.words.length){ startScenarios(); return; }
+    stage = "teach";
+    render();
+    const w = category.words[wIdx];
+    speak(`Word ${wIdx+1} of ${category.words.length}: ${w.word}. It means: ${w.def}. For example: ${w.example}`, () => {
+      stage = "pronounce";
+      render();
+    });
+  }
+
+  function tryPronounce(){
+    const w = category.words[wIdx];
+    stage = "pronounce";
+    render();
+    speak(`Your turn — say the word "${w.word}" out loud.`, () => {
+      listen((text) => {
+        lastTranscript = text;
+        pronounceOk = looseContains(text, w.word);
+        stats.taught++;
+        if (pronounceOk) stats.pronounced++;
+        stage = "teachDone";
+        render();
+      });
+    });
+  }
+
+  function nextTeachWord(){
+    wIdx++;
+    lastTranscript = ""; pronounceOk = null;
+    teachNext();
+  }
+
+  function startScenarios(){
+    stage = "scenarioIntro";
+    render();
+    speak(`Nice, you've met all ${category.words.length} words. Now let's actually use them — I'll describe a situation, and you respond out loud using two of the words we just learned.`, () => {
+      runScenario();
+    });
+  }
+
+  function runScenario(){
+    if (sIdx >= category.scenarios.length){ startReview(); return; }
+    const s = category.scenarios[sIdx];
+    stage = "scenarioPrompt";
+    lastTranscript = ""; lastHits = [];
+    render();
+    speak(s.prompt + ` Try to use "${s.targets[0]}" and "${s.targets[1]}" in your answer.`, () => {
+      stage = "scenarioPrompt";
+      render();
+    });
+  }
+
+  function nextScenario(){
+    sIdx++;
+    runScenario();
+  }
+
+  function startReview(){
+    if (reviewQueue.length === 0){ finishSession(); return; }
+    reviewIdx = 0;
+    stage = "review";
+    render();
+    speak(`Quick review round — a few words didn't come through. Let's redo them fast.`, () => {
+      runReview();
+    });
+  }
+
+  function runReview(){
+    if (reviewIdx >= reviewQueue.length){ finishSession(); return; }
+    lastTranscript = "";
+    pronounceOk = null;
+    stage = "review";
+    render();
+  }
+
+  function nextReview(){
+    reviewIdx++;
+    runReview();
+  }
+
+  function finishSession(){
+    stage = "summary";
+    render();
+    speak(`All done. Nice work getting through this set.`);
+  }
+
+  function typedAnswer(promptText, cb){
+    const val = prompt(promptText);
+    if (val === null) return;
+    cb(val);
+  }
+
+  function restart(){
+    category = null; stage = "start"; render();
+  }
+
+  function render(){
+    if (stage === "start"){
+      mainCard.innerHTML = `
+        <div class="start-screen">
+          <div class="big-emoji">🎯</div>
+          <p>Pick what you're learning words <b>for</b>. Each path teaches 6 words, then challenges you to use pairs of them in a real spoken answer — not just define them back.</p>
+        </div>
+        <div class="cat-grid" id="catGrid"></div>`;
+      const grid = document.getElementById("catGrid");
+      CATEGORIES.forEach(c => {
+        const el = document.createElement("div");
+        el.className = "cat-card";
+        el.innerHTML = `<div class="cname">${c.label}</div><div class="cdesc">${c.desc}</div>`;
+        el.onclick = () => chooseCategory(c);
+        grid.appendChild(el);
+      });
+      return;
+    }
+
+    if (stage === "summary"){
+      const pronPct = stats.taught ? Math.round(100*stats.pronounced/stats.taught) : 0;
+      const prodPct = stats.targetsTotal ? Math.round(100*stats.targetsHit/stats.targetsTotal) : 0;
+      mainCard.innerHTML = `
+        <div class="summary">
+          <div class="big-emoji">🏁</div>
+          <div style="font-weight:700; font-size:1.05rem; margin-bottom:4px;">${category.label} — complete</div>
+          <div class="stat-grid">
+            <div class="stat"><div class="num">${stats.taught}</div><div class="lbl">words learned</div></div>
+            <div class="stat"><div class="num">${pronPct}%</div><div class="lbl">pronounced right</div></div>
+            <div class="stat"><div class="num">${prodPct}%</div><div class="lbl">used correctly live</div></div>
+          </div>
+          ${reviewQueue.length ? `<div style="font-size:0.82rem; color:var(--muted); margin-bottom:12px;">Reviewed ${reviewQueue.length} missed word(s) — fixed ${stats.reviewFixed} on the redo.</div>` : ''}
+          <div class="row-btns">
+            <button class="btn" id="restartBtn">Choose another category</button>
+            <button class="btn primary" id="redoBtn">Redo this one</button>
+          </div>
+        </div>`;
+      document.getElementById("restartBtn").onclick = restart;
+      document.getElementById("redoBtn").onclick = () => chooseCategory(category);
+      return;
+    }
+
+    if (stage === "teach" || stage === "pronounce" || stage === "teachDone"){
+      const w = category.words[wIdx];
+      const pct = Math.round((wIdx / category.words.length) * 100);
+      let agentText = "";
+      if (stage === "teach") agentText = `Teaching "${w.word}"...`;
+      else if (stage === "pronounce") agentText = speaking ? "..." : `Tap the mic and say "${w.word}" out loud.`;
+      else if (stage === "teachDone") agentText = pronounceOk ? "Got it — nice pronunciation." : `Close enough — moving on.`;
+
+      mainCard.innerHTML = `
+        <div class="stage-tag">Step 1 · Learn the words</div>
+        <div class="progress-row">
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="progress-label">${wIdx+1} / ${category.words.length}</div>
+        </div>
+        <div class="word-display">
+          <div class="pos">${w.pos}</div>
+          <div class="word">${w.word}</div>
+          <div class="def">${w.def}</div>
+          <div class="ex">"${w.example}"</div>
+        </div>
+        <div class="agent-line">
+          <div class="agent-avatar">${speaking ? '🔊' : '🤖'}</div>
+          <div class="agent-text ${speaking?'speaking':''}">${agentText}</div>
+        </div>
+        <div class="controls">
+          <button class="mic-btn" id="micBtn" ${!hasSTT || stage!=='pronounce' || speaking ? 'disabled':''}>
+            <svg class="mic-icon" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+          </button>
+          <div class="mic-hint">${hasSTT ? 'Tap to speak the word' : 'Voice input unsupported'}</div>
+          ${!hasSTT && stage==='pronounce' ? `<button class="btn" id="typedBtn" style="max-width:220px;">Type it instead</button>` : ''}
+        </div>
+        <div class="transcript ${lastTranscript?'':'empty'}">${lastTranscript || ''}</div>
+        <div class="feedback ${stage==='teachDone' ? 'show '+(pronounceOk?'good':'bad') : ''}">
+          ${pronounceOk ? '✅ That matched.' : stage==='teachDone' ? "⚠️ Didn't quite catch that — no worries, moving on." : ''}
+        </div>
+        <div class="row-btns" style="margin-top:18px;">
+          ${stage==='teachDone' ? `<button class="btn primary" id="nextBtn" style="flex:1;">Next word →</button>` : `<button class="btn" id="skipBtn" style="flex:1;">Skip</button>`}
+        </div>`;
+      const micBtn = document.getElementById("micBtn");
+      if (micBtn) micBtn.onclick = tryPronounce;
+      const typedBtn = document.getElementById("typedBtn");
+      if (typedBtn) typedBtn.onclick = () => typedAnswer(`Type the word "${w.word}":`, (val) => {
+        lastTranscript = val; pronounceOk = looseContains(val, w.word);
+        stats.taught++; if(pronounceOk) stats.pronounced++;
+        stage = "teachDone"; render();
+      });
+      const nextBtn = document.getElementById("nextBtn");
+      if (nextBtn) nextBtn.onclick = nextTeachWord;
+      const skipBtn = document.getElementById("skipBtn");
+      if (skipBtn) skipBtn.onclick = nextTeachWord;
+      return;
+    }
+
+    if (stage === "scenarioIntro" || stage === "scenarioPrompt" || stage === "scenarioListen" || stage === "scenarioResult"){
+      const s = category.scenarios[sIdx];
+      const pct = Math.round((sIdx / category.scenarios.length) * 100);
+      let agentText = "";
+      if (stage === "scenarioIntro") agentText = "Getting the challenge ready...";
+      else if (stage === "scenarioPrompt") agentText = speaking ? "..." : "Listen to the scenario, then respond.";
+      else if (stage === "scenarioListen") agentText = "Listening to your answer...";
+      else if (stage === "scenarioResult"){
+        const hitCount = lastHits.filter(h=>h.hit).length;
+        agentText = hitCount === lastHits.length ? "Both words landed naturally. Nice." :
+                    hitCount === 0 ? "Neither word came through — they'll come back in the review round." :
+                    "Got one of the two — the other will come back for a quick redo.";
+      }
+      mainCard.innerHTML = `
+        <div class="stage-tag">Step 2 · Use them for real</div>
+        <div class="progress-row">
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="progress-label">Scenario ${sIdx+1} / ${category.scenarios.length}</div>
+        </div>
+        <div class="scenario-box">
+          <div class="prompt">${s.prompt}</div>
+          <div class="target-chips">
+            ${s.targets.map(t => {
+              const h = lastHits.find(x=>x.word===t);
+              const cls = h ? (h.hit ? 'hit':'miss') : '';
+              return `<span class="chip ${cls}">${t}${h ? (h.hit?' ✓':' ✗') : ''}</span>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="agent-line">
+          <div class="agent-avatar">${speaking ? '🔊' : '🤖'}</div>
+          <div class="agent-text ${speaking?'speaking':''}">${agentText}</div>
+        </div>
+        ${(stage==='scenarioListen' || (stage==='scenarioPrompt' && !speaking)) ? `
+        <div class="controls">
+          <button class="mic-btn ${stage==='scenarioListen'?'listening':''}" id="micBtn" ${!hasSTT || speaking ? 'disabled':''}>
+            <svg class="mic-icon" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+          </button>
+          <div class="mic-hint">${hasSTT ? (stage==='scenarioListen' ? 'Listening — speak your answer' : 'Tap to answer') : 'Voice input unsupported'}</div>
+          ${!hasSTT ? `<button class="btn" id="typedBtn" style="max-width:240px;">Type your answer</button>` : ''}
+        </div>` : ''}
+        <div class="transcript ${lastTranscript?'':'empty'}">${lastTranscript || ''}</div>
+        <div class="row-btns" style="margin-top:18px;">
+          ${stage==='scenarioResult' ? `<button class="btn primary" id="nextBtn" style="flex:1;">${sIdx+1 >= category.scenarios.length ? 'Continue →' : 'Next scenario →'}</button>` : ''}
+        </div>`;
+      const micBtn = document.getElementById("micBtn");
+      if (micBtn) micBtn.onclick = () => {
+        stage = "scenarioListen"; render();
+        listen((text) => {
+          lastTranscript = text;
+          lastHits = s.targets.map(t => ({ word:t, hit: looseContains(text, t) }));
+          stats.targetsTotal += s.targets.length;
+          stats.targetsHit += lastHits.filter(h=>h.hit).length;
+          lastHits.filter(h=>!h.hit).forEach(h => { if(!reviewQueue.includes(h.word)) reviewQueue.push(h.word); });
+          stage = "scenarioResult"; render();
+        });
+      };
+      const typedBtn = document.getElementById("typedBtn");
+      if (typedBtn) typedBtn.onclick = () => typedAnswer("Type your answer:", (val) => {
+        lastTranscript = val;
+        lastHits = s.targets.map(t => ({ word:t, hit: looseContains(val, t) }));
+        stats.targetsTotal += s.targets.length;
+        stats.targetsHit += lastHits.filter(h=>h.hit).length;
+        lastHits.filter(h=>!h.hit).forEach(h => { if(!reviewQueue.includes(h.word)) reviewQueue.push(h.word); });
+        stage = "scenarioResult"; render();
+      });
+      const nextBtn = document.getElementById("nextBtn");
+      if (nextBtn) nextBtn.onclick = nextScenario;
+      return;
+    }
+
+    if (stage === "review"){
+      const word = reviewQueue[reviewIdx];
+      mainCard.innerHTML = `
+        <div class="stage-tag">Step 3 · Quick review</div>
+        <div class="progress-row">
+          <div class="progress-bar"><div class="progress-fill" style="width:${Math.round((reviewIdx/reviewQueue.length)*100)}%"></div></div>
+          <div class="progress-label">${reviewIdx+1} / ${reviewQueue.length} missed words</div>
+        </div>
+        <div class="word-display"><div class="word">${word}</div></div>
+        <div class="agent-line">
+          <div class="agent-avatar">${speaking ? '🔊' : '🤖'}</div>
+          <div class="agent-text ${speaking?'speaking':''}">${lastTranscript ? (pronounceOk?'Nice, that works.':"Still tricky — that's okay, moving on.") : `Use "${word}" in a short sentence.`}</div>
+        </div>
+        <div class="controls">
+          <button class="mic-btn" id="micBtn" ${!hasSTT || speaking || lastTranscript ? 'disabled':''}>
+            <svg class="mic-icon" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+          </button>
+          <div class="mic-hint">${hasSTT ? 'Tap to speak' : 'Voice input unsupported'}</div>
+        </div>
+        <div class="transcript ${lastTranscript?'':'empty'}">${lastTranscript || ''}</div>
+        <div class="feedback ${lastTranscript ? 'show '+(pronounceOk?'good':'bad') : ''}">
+          ${lastTranscript ? (pronounceOk ? '✅ Fixed it.' : '⚠️ Still needs practice.') : ''}
+        </div>
+        <div class="row-btns" style="margin-top:18px;">
+          ${lastTranscript ? `<button class="btn primary" id="nextBtn" style="flex:1;">${reviewIdx+1>=reviewQueue.length?'Finish →':'Next →'}</button>` : ''}
+        </div>`;
+      const micBtn = document.getElementById("micBtn");
+      if (micBtn) micBtn.onclick = () => {
+        listen((text) => {
+          lastTranscript = text;
+          pronounceOk = looseContains(text, word);
+          if (pronounceOk) stats.reviewFixed++;
+          render();
+        });
+      };
+      const nextBtn = document.getElementById("nextBtn");
+      if (nextBtn) nextBtn.onclick = nextReview;
+      return;
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
